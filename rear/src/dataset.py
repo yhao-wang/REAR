@@ -1,7 +1,8 @@
-from llmtuner.extras.logging import get_logger
+import os
 from datasets import load_dataset
 from transformers import DataCollatorForSeq2Seq
 import torch
+from .utils import get_logger
 
 
 logger = get_logger(__name__)
@@ -10,8 +11,8 @@ logger = get_logger(__name__)
 def process_ungrouped(sample, tokenizer):
     # build inputs with format `<bos> X Y <eos>` and labels with format `<ignore> ... <ignore> Y <eos>`
     # for multiturn examples, we only mask the prompt part in each prompt-response pair.
-    source_ids = tokenizer.encode(['<s>'] + sample['input'], add_special_tokens=False)
-    target_ids = tokenizer.encode(sample['output'] + ['</s>'], add_special_tokens=False)
+    source_ids = tokenizer.encode('<s>' + sample['input'], add_special_tokens=False)
+    target_ids = tokenizer.encode(sample['output'] + '</s>', add_special_tokens=False)
     cutoff_len = 300
     max_target_len = min(15, len(target_ids))
     max_source_len = cutoff_len - max_target_len
@@ -43,8 +44,8 @@ def process_grouped(samples, tokenizer):
     # for multiturn examples, we only mask the prompt part in each prompt-response pair.
     feature = {"grouped_inputs": []}
     for sample in samples:
-        source_ids = tokenizer.encode(['<s>'] + sample['input'], add_special_tokens=False)
-        target_ids = tokenizer.encode(sample['output'] + ['</s>'], add_special_tokens=False)
+        source_ids = tokenizer.encode('<s>' + sample['input'], add_special_tokens=False)
+        target_ids = tokenizer.encode(sample['output'] + '</s>', add_special_tokens=False)
         cutoff_len = 300
         max_target_len = min(15, len(target_ids))
         max_source_len = cutoff_len - max_target_len
@@ -80,13 +81,13 @@ def get_dataset(file_path, tokenizer, is_warm_up):
     dataset = load_dataset('json', data_files=file_path)
     train_dataset = dataset["train"]
     dataset_name = (file_path.split('/')[-1]).split('.')[0]
+    os.makedirs(".cache", exist_ok=True)
     tokenized_dataset = train_dataset.map(process, fn_kwargs={'tokenizer': tokenizer}, num_proc=20, cache_file_name=f".cache/{dataset_name}-retriever.cache")
     return tokenized_dataset
 
 
-class RanksftDataCollator(DataCollatorForSeq2Seq):
+class RearDataCollator(DataCollatorForSeq2Seq):
     def __init__(self, *args, **kwargs):
-        self.mask_rel_token = kwargs.pop("mask_rel_token", False)
         super().__init__(*args, **kwargs)
         self.judgment_toks = self.tokenizer.convert_tokens_to_ids(["<IRRELEVANT>", "<RELEVANT>"])
 
@@ -100,11 +101,10 @@ class RanksftDataCollator(DataCollatorForSeq2Seq):
         for feature in features:
             classes.append(feature.pop("classes"))
         features = super().__call__(features, return_tensors=return_tensors)
-        if self.mask_rel_token:
-            for label_idx, label in enumerate(features['input_ids']):
-                for idx, tok in enumerate(label):
-                    if tok in self.judgment_toks:
-                        features['labels'][label_idx][idx] = self.label_pad_token_id
-                        break
+        for label_idx, label in enumerate(features['input_ids']):
+            for idx, tok in enumerate(label):
+                if tok in self.judgment_toks:
+                    features['labels'][label_idx][idx] = self.label_pad_token_id
+                    break
         features['classes'] = torch.tensor(classes, dtype=torch.float16)
         return features

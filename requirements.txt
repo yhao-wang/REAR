@@ -1,7 +1,8 @@
 vllm==0.2.3
-tranformers==4.34.0
+tranformers==4.38.0
 datasets==2.14.3
 flash-attn==2.3.5
 torch
 deepspeed
-accelerate
+accelerate==0.27.2
+safetensors

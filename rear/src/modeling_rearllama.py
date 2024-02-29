@@ -9,12 +9,29 @@ from torch.nn import CrossEntropyLoss
 from transformers.modeling_outputs import ModelOutput
 
 from transformers.utils import logging
-from transformers.models.llama.modeling_llama import CausalLMOutputWithPast, LlamaForCausalLM, LlamaConfig
+from transformers.models.llama.modeling_llama import LlamaAttention, CausalLMOutputWithPast, LlamaForCausalLM, LlamaConfig, LlamaModel, LlamaFlashAttention2
 from dataclasses import dataclass
 from itertools import product
 
 
 logger = logging.get_logger(__name__)
+
+
+def flash_attn2_prepare_decoder_attention_mask(
+    self,
+    attention_mask: torch.Tensor,
+    input_shape: torch.Tensor,
+    inputs_embeds: torch.Tensor,
+    past_key_values_length: int
+) -> torch.Tensor:
+    if attention_mask is not None and torch.all(attention_mask):
+        return None  # This uses the faster call when training with full samples
+
+    return attention_mask
+
+
+LlamaAttention = LlamaFlashAttention2
+LlamaModel._prepare_decoder_attention_mask = flash_attn2_prepare_decoder_attention_mask
 
 
 class LossForRank:
@@ -24,16 +41,16 @@ class LossForRank:
         is_warm_up: bool = False,
         bias: float = 1.0,
         psg_num: int = 4,
-        ignore_minor_diff: float = 0.0,
+        minor_diff: float = 0.0,
         bce_bias: float = 0.5,
     ):
         self.bias = bias
         self.compute_loss = F.binary_cross_entropy_with_logits 
         self.psg_num = psg_num
-        self.ignore_minor_diff = ignore_minor_diff
+        self.minor_diff = minor_diff
         self.bce_bias = bce_bias
         if is_warm_up:
-            self.loss_fn = self.bce
+            self.loss_fn = self.coarse
         else:
             self.loss_fn = self.bi
         
@@ -55,7 +72,7 @@ class LossForRank:
 
         true_diffs = pairs_true[:, :, 0] - pairs_true[:, :, 1]
         pred_diffs = selected_pred[:, :, 0] - selected_pred[:, :, 1]
-        the_mask = (true_diffs > self.ignore_minor_diff) & (~torch.isinf(true_diffs))
+        the_mask = (true_diffs > self.minor_diff) & (~torch.isinf(true_diffs))
         pred_diffs = pred_diffs[the_mask]
 
         true_diffs = true_diffs[the_mask]
@@ -110,7 +127,7 @@ class LlamaForRear(LlamaForCausalLM):
         enable_verify: bool = False, 
         bias: float = 0.4, 
         psg_num: int = 4, 
-        ignore_mirror_diff: float = 0.1,
+        minor_diff: float = 0.1,
         rank_only: bool = False,
         proj_scaler: float = 1.0,
         bce_bias: float = 0.5,
@@ -130,7 +147,7 @@ class LlamaForRear(LlamaForCausalLM):
             is_warm_up=is_warm_up,
             psg_num=psg_num,
             bias=bias,
-            ignore_mirror_diff=ignore_mirror_diff,
+            minor_diff=minor_diff,
             bce_bias=bce_bias,)
         self.enable_verify = enable_verify
         self.ans_fn = CrossEntropyLoss()
@@ -188,7 +205,6 @@ class LlamaForRear(LlamaForCausalLM):
             loss=loss,
             logits=sft_output.logits,
             rel_scores=rank_output.rel_scores,
-            verify_scores=rank_output.verify_scores,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
@@ -200,11 +216,10 @@ class LlamaForRear(LlamaForCausalLM):
         logits = self.lm_head(hidden_states)
         logits = logits.float()
         
-        
         loss=torch.tensor(0, device=logits.device)
         if labels is not None:
-            shift_logits = logits[:, :-1, :].view(-1, self.config.vocab_size).contiguous()
-            shift_labels = labels[:, 1:].view(-1).contiguous()
+            shift_logits = logits[:, :-1, :].reshape(-1, self.config.vocab_size)
+            shift_labels = labels[:, 1:].reshape(-1)
             loss = self.ans_fn(shift_logits, shift_labels)
 
         return CausalLMOutputWithPast(
