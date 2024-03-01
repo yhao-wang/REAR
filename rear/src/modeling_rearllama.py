@@ -7,9 +7,9 @@ import torch.utils.checkpoint
 from torch import nn
 from torch.nn import CrossEntropyLoss
 from transformers.modeling_outputs import ModelOutput
-
+import transformers.models.llama.modeling_llama as LlamaModelFile
 from transformers.utils import logging
-from transformers.models.llama.modeling_llama import LlamaAttention, CausalLMOutputWithPast, LlamaForCausalLM, LlamaConfig, LlamaModel, LlamaFlashAttention2
+from transformers.models.llama.modeling_llama import LlamaForCausalLM, LlamaConfig, LlamaModel, LlamaFlashAttention2
 from dataclasses import dataclass
 from itertools import product
 
@@ -30,7 +30,7 @@ def flash_attn2_prepare_decoder_attention_mask(
     return attention_mask
 
 
-LlamaAttention = LlamaFlashAttention2
+LlamaModelFile.LlamaAttention = LlamaFlashAttention2
 LlamaModel._prepare_decoder_attention_mask = flash_attn2_prepare_decoder_attention_mask
 
 
@@ -64,7 +64,6 @@ class LossForRank:
 
         y_pred = scores.view(-1, self.psg_num)
         y_true = labels.view(-1, self.psg_num)
-
         document_pairs_candidates = list(product(range(y_true.shape[1]), repeat=2))
 
         pairs_true = y_true[:, document_pairs_candidates]
@@ -125,13 +124,11 @@ class LlamaForRear(LlamaForCausalLM):
         is_warm_up : bool = False, 
         num_labels: int = 1, 
         enable_verify: bool = False, 
-        bias: float = 0.4, 
-        psg_num: int = 4, 
+        bias: float = 0.7, 
+        psg_num: int = 8, 
         minor_diff: float = 0.1,
-        rank_only: bool = False,
-        proj_scaler: float = 1.0,
-        bce_bias: float = 0.5,
-        threshold: float = 13.
+        proj_scaler: float = 2.0,
+        bce_bias: float = 0.3,
     ):
         self.num_labels = num_labels
         self.beta = beta
@@ -139,9 +136,6 @@ class LlamaForRear(LlamaForCausalLM):
         self.irr_token_id = irr_token_id
         self.rel_score = nn.Linear(hidden_size, num_labels, bias=False)
         self.gen_score_id = gen_score_id
-
-        self.list_wise = False
-        self.rank_only = rank_only
         self.proj_scaler = proj_scaler
         self.rel_eval_fn = LossForRank(
             is_warm_up=is_warm_up,
@@ -151,7 +145,6 @@ class LlamaForRear(LlamaForCausalLM):
             bce_bias=bce_bias,)
         self.enable_verify = enable_verify
         self.ans_fn = CrossEntropyLoss()
-        self.threshold = threshold
         
     def forward(
         self,
@@ -185,12 +178,6 @@ class LlamaForRear(LlamaForCausalLM):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-            
-        if self.beta is None:
-            if self.rel_token_id in input_ids[0] or self.irr_token_id in input_ids[0]:
-                return self.ans(outputs=outputs, labels=labels)
-            else:
-                return self.rel_eval(input_ids=input_ids, outputs=outputs)
         
         sft_output = self.ans(outputs=outputs, labels=labels)
         rank_output = self.rel_eval(input_ids=input_ids, outputs=outputs, classes=classes)
@@ -199,16 +186,9 @@ class LlamaForRear(LlamaForCausalLM):
         
         if not return_dict:
             output = (sft_output.logits,) + outputs[1:]
-            return (loss,) + output if loss is not None else output
-
-        return RearOutput(
-            loss=loss,
-            logits=sft_output.logits,
-            rel_scores=rank_output.rel_scores,
-            past_key_values=outputs.past_key_values,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
-        )
+            return (loss,) + output if loss is not None else output 
+        sft_output.rel_scores=rank_output.rel_scores
+        return sft_output
 
     def ans(self, outputs, labels=None):
         
@@ -222,7 +202,7 @@ class LlamaForRear(LlamaForCausalLM):
             shift_labels = labels[:, 1:].reshape(-1)
             loss = self.ans_fn(shift_logits, shift_labels)
 
-        return CausalLMOutputWithPast(
+        return RearOutput(
             loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,
@@ -244,16 +224,9 @@ class LlamaForRear(LlamaForCausalLM):
         loss = None
         if classes is not None:
             loss = self.rel_eval_fn(scores=rel_logits, labels=classes.to(rel_logits.dtype))
-            
-        logits = None
-        if self.beta is None:
-            logits = torch.full((hidden_states.shape[0], hidden_states.shape[1], self.lm_head.out_features), -100, device=hidden_states.device, dtype=hidden_states.dtype)
-            logits[rel_logits > self.threshold, rel_position, self.rel_token_id] = 100
-            logits[rel_logits <= self.threshold, rel_position, self.irr_token_id] = 100
         
         return RearOutput(
             loss=loss,
-            logits=logits,
             rel_scores=rel_logits,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
