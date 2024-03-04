@@ -1,5 +1,6 @@
 data/
 __pycache__/
+rear-llama-7b-hf/
 .*/
 *.ipynb
 *.json

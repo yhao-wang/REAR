@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
-from .vllm_rear import enable_vllm_for_rankllama
+from .vllm_rear import enable_vllm_for_rearllama
 from .utils import get_logger
 from .modeling_rearllama import LlamaForCausalLM
 
@@ -16,7 +16,7 @@ def get_vllm_model(model_path, **kwargs):
     tmp_tokenizer = AutoTokenizer.from_pretrained(model_path)
     rel_tok_id = tmp_tokenizer.convert_tokens_to_ids("<RELEVANT>")
     irr_tok_id = tmp_tokenizer.convert_tokens_to_ids("<IRRELEVANT>")
-    enable_vllm_for_rankllama(rel_tok_id=rel_tok_id, irr_tok_id=irr_tok_id)
+    enable_vllm_for_rearllama(rel_tok_id=rel_tok_id, irr_tok_id=irr_tok_id)
     global model, tokenizer, generation_config
     gpu_memory_utilization = kwargs.pop("gpu_memory_utilization", 0.9)
     kwargs.update(dict(greedy=True, max_new_tokens=20))
@@ -26,10 +26,9 @@ def get_vllm_model(model_path, **kwargs):
     
 def get_model(model_path, **kwargs):
     global model, tokenizer
-    kwargs = {"torch_dtype": torch.bfloat16, 'trust_remote_code': True}
+    kwargs.update({"torch_dtype": torch.bfloat16, 'trust_remote_code': True})
     model = LlamaForCausalLM.from_pretrained(model_path, **kwargs)
     tokenizer = AutoTokenizer.from_pretrained(model_path, **kwargs)
-    kwargs.update(dict(greedy=True, max_new_tokens=20))
     model = model.eval()
 
 def batch_generate(prompt):

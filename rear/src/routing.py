@@ -27,18 +27,18 @@ def load_data(source):
 
 
 def reliability(dic):
-    docs = dic['dense_ctxs'][:10]
+    docs = dic['ctxs']
     response = get_scores(dic['question'], docs)
     return {
         'question': dic['question'],
-        'reference': dic['reference'],
-        'dense_ctxs': docs,
+        'reference': dic.pop('reference', None),
+        'ctxs': docs,
         'response': response,
     }
 
 
 def consistency(dic):
-    dic.update(dict(response=get_perplexity(dic['question'], dic['dense_ctxs'], dic['response'])))
+    dic.update(dict(response=get_perplexity(dic['question'], dic['ctxs'], dic['response'])))
     return dic
 
 

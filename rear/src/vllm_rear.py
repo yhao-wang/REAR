@@ -423,7 +423,7 @@ def _process_sequence_group_outputs(self, seq_group: SequenceGroup,
             self.scheduler.free_seq(seq)
 
 
-class LlamaForRankCausalLM(LlamaForCausalLM):
+class LlamaForRear(LlamaForCausalLM):
 
     def load_weights(self,
                      model_name_or_path: str,
@@ -466,7 +466,7 @@ class LlamaForRankCausalLM(LlamaForCausalLM):
                 weight_loader(param, loaded_weight)
 
 
-def enable_vllm_for_rankllama(threshold=13, rel_tok_id=32001, irr_tok_id=32002):
+def enable_vllm_for_rearllama(threshold=13, rel_tok_id=32001, irr_tok_id=32002):
     global THRESHOLD, REL_TOK_ID, IRR_TOK_ID
     THRESHOLD = threshold
     REL_TOK_ID = rel_tok_id
@@ -477,4 +477,4 @@ def enable_vllm_for_rankllama(threshold=13, rel_tok_id=32001, irr_tok_id=32002):
     Sampler.__init__ = RankSampler.__init__
     Sampler.forward = RankSampler.forward
     RequestOutput.from_seq_group = from_seq_group           
-    _MODEL_REGISTRY.update(dict(LlamaForRankCausalLM=LlamaForRankCausalLM))
+    _MODEL_REGISTRY.update(dict(LlamaForRear=LlamaForRear))
