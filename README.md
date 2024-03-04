@@ -16,11 +16,17 @@ The checkpoint is availible on huggingface🤗. [[checkpoint]](https://huggingfa
     from rear.src.routing import reliability
     get_vllm_model("RUCAIBox/rear-llama-7b-hf")
     dic = {
-        "question": "Who won the first Nobel Prize in Physics",
-        "ctxs": ["Wilhelm Conrad Röntgen won first Nobel Prize in Physics."]
-    }
-    res = reliability(dic)
-    print(res['response'])
+        "question": "Who won the first Noble Prize in Physics",
+        "ctxs": [
+            "Wilhelm Conrad Röntgen won first Nobel Prize in Physics.",
+            "Wilhelm Conrad Röntgen won it for discovery of X-rays",
+            "Albert Einstein was awarded the 1921 Nobel Prize in Physics",
+            "The Nobel Prize in Physics is a yearly award.",
+            "First law of thermodynamics was stated by William"
+            ]
+        }
+    res = reliability(dic)['rely_answer']
+    print(res['rely_answer'])
     ```
 
 ## 🔍 Training and Inference Scripts
@@ -36,19 +42,20 @@ The checkpoint is availible on huggingface🤗. [[checkpoint]](https://huggingfa
 
     ```bash
     python rear/inference.py \
-        --model_path [your output model dir] \
+        --model_path [output model dir] \
         --phase reliability \
-        --source [your test source file] \
-        --outfile [your output data dir]
+        --source [test source file] \
+        --outfile [output data dir]
     ```
     Second, to generate the knowledge-consistency scores:
     ```bash
     python rear/inference.py \
         --model_path [your output model dir] \
         --phase consistency \
-        --source [your output data dir in reliability-generation phase] \
+        --source [your generated path-reliability data dir] \
         --outfile [your output data dir]
     ```
+    After running these scripts, if you have provided **"reference"** as the ground truth in the test source data, the **EM** (Exact Match) and **F1** scores will be automatically calculated.
 
 
 ## 🌟 Acknowledgement

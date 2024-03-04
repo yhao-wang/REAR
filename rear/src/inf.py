@@ -45,8 +45,8 @@ def get_scores(query, ctxs):
 
     res = []
     for pred, s in zip(responses, scores):
-        res.append({"preds": pred,
-                    "scores": s,})
+        res.append({"pred": pred,
+                    "score": s,})
     return res
 
 def batch_perplexity(pairs):
@@ -88,10 +88,8 @@ def get_perplexity(query, ctxs, res):
     pairs = [(q_template.format(q=query, d=c), a_template.format(a=a)) for c, a in zip(ctxs, preds)]
     ppl_res = []
     for batch_id in range(0, len(pairs), batch_size):
-        ppl_res += batch_perplexity(pairs)
+        ppl_res += batch_perplexity(pairs[batch_id: batch_id + batch_size])
     
     for did, dic in enumerate(res):
-        dic["verification"] = []
-        for res_idx in range(2):
-            dic["verification"].append(ppl_res[did])
+        dic["con"] = ppl_res[did]
     return res

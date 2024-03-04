@@ -1,7 +1,7 @@
 import argparse
 from tqdm import tqdm
 import json
-from .utils import get_logger
+from .utils import get_logger, EM_compute, F1_compute
 from .inf import get_vllm_model, get_scores, get_model, get_perplexity
 
 
@@ -29,16 +29,32 @@ def load_data(source):
 def reliability(dic):
     docs = dic['ctxs']
     response = get_scores(dic['question'], docs)
+    rely_answer = max(response, key=lambda x: x['score'])['pred']
+    ans_dict = {'pred': rely_answer}
+    gold_ans = dic.pop('reference', None)
+    if gold_ans is not None:
+        ans_dict.update(dict(EM=EM_compute(gold_ans, rely_answer)))
+        ans_dict.update(dict(F1=F1_compute(gold_ans, rely_answer)))
     return {
         'question': dic['question'],
-        'reference': dic.pop('reference', None),
+        'reference': gold_ans,
         'ctxs': docs,
         'response': response,
+        'rely_answer': ans_dict,
     }
 
 
 def consistency(dic):
-    dic.update(dict(response=get_perplexity(dic['question'], dic['ctxs'], dic['response'])))
+    response = get_perplexity(dic['question'], dic['ctxs'], dic['response'])
+    # dic.update(dict(response=response))
+    con_answer = max(response, key=lambda x: x['score'] + 9 * x['con'])['pred']
+    ans_dict = {'pred': con_answer}
+    gold_ans = response['reference']
+    if gold_ans is not None:
+        ans_dict.update(dict(EM=EM_compute(gold_ans, con_answer)))
+        ans_dict.update(dict(F1=F1_compute(gold_ans, con_answer)))
+    response.update(dict(con_answer=ans_dict))
+    dic.update(dic(response=response))
     return dic
 
 
@@ -46,8 +62,16 @@ def s2(args):
     get_model(args.model_path)
     data = load_data(args.source)
     res = []
+    em = []
+    f1 = []
     for dic in tqdm(data):
         res.append(consistency(dic))
+        if res['reference'] is not None:
+            em.append(res['response']['con_answer']['EM'])
+            f1.append(res['response']['con_answer']['F1'])
+    if em:
+        print(f"EM: {sum(em) / len(em) * 100}")
+        print(f"F1: {sum(f1) / len(em) * 100}")
     with open(args.outfile, "w", encoding='utf-8') as f:
         json.dump(res, f)
 
@@ -56,8 +80,16 @@ def s1(args):
     get_vllm_model(args.model_path)
     data = load_data(args.source)
     res = []
+    em = []
+    f1 = []
     for dic in tqdm(data):
         res.append(reliability(dic))
+        if res['reference'] is not None:
+            em.append(res['response']['rely_answer']['EM'])
+            f1.append(res['response']['rely_answer']['F1'])
+    if em:
+        print(f"EM: {sum(em) / len(em) * 100}")
+        print(f"F1: {sum(f1) / len(em) * 100}")
     with open(args.outfile, "w", encoding='utf-8') as f:
         json.dump(res, f)
 
