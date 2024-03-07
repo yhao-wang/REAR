@@ -3,8 +3,6 @@ REAR is a **RE**levance-**A**ware **R**etrieval-augmented framework for open-dom
 
 The checkpoint is availible on huggingface🤗. [[checkpoint]](https://huggingface.co/RUCAIBox/rear-llama-7b-hf)
 
-The question-and-answer pairs, along with the documents used for inference, are available for download at the following link: [[data]](https://huggingface.co/datasets/yhao-wang/rear-eval).
-
 ## 🚀 Quick Start
 
 1. Install dependencies.
@@ -17,7 +15,7 @@ The question-and-answer pairs, along with the documents used for inference, are 
     from rear.src.inf import get_vllm_model
     from rear.src.routing import reliability
     get_vllm_model("RUCAIBox/rear-llama-7b-hf")
-    dic = {
+    example = {
         "question": "Who won the first Noble Prize in Physics",
         "ctxs": [
             "Wilhelm Conrad Röntgen won first Nobel Prize in Physics.",
@@ -27,7 +25,7 @@ The question-and-answer pairs, along with the documents used for inference, are 
             "First law of thermodynamics was stated by William"
             ]
         }
-    final_answer = reliability(dic)['rely_answer']
+    final_answer = reliability(example)['rely_answer']
     print(final_answer)
     ```
 
@@ -35,7 +33,7 @@ The question-and-answer pairs, along with the documents used for inference, are 
 
 1. Training.
     ```bash
-    bash train.sh meta-llama/Llama-2-7b-hf [your output model dir] [your training data dir] [your deepspeed config file]
+    bash train.sh meta-llama/Llama-2-7b-hf [model output path] [training data] [deepspeed config file]
     ```
 
 2. Inference.
@@ -44,19 +42,22 @@ The question-and-answer pairs, along with the documents used for inference, are 
 
     ```bash
     python rear/inference.py \
-        --model_path [output model dir] \
+        --model_path RUCAIBox/rear-llama-7b-hf \
         --phase reliability \
-        --source [test source file] \
-        --outfile [output data dir]
+        --source [test file] \
+        --outfile [output file(1)]
     ```
     Second, to generate the knowledge-consistency scores:
     ```bash
     python rear/inference.py \
-        --model_path [your output model dir] \
+        --model_path RUCAIBox/rear-llama-7b-hf \
         --phase consistency \
-        --source [your generated path-reliability data dir] \
-        --outfile [your output data dir]
+        --source [output file(1)] \
+        --outfile [output file(2)]
     ```
+
+    The QA pairs, along with the documents used for inference, are available for download at the following link: [[data]](https://huggingface.co/datasets/yhao-wang/rear-eval). 
+
     After running these scripts, if you have provided **"reference"** as the ground truth in the test source data, the **EM** (Exact Match) and **F1** scores will be automatically calculated.
 
 
