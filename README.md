@@ -3,6 +3,8 @@ REAR is a **RE**levance-**A**ware **R**etrieval-augmented framework for open-dom
 
 The checkpoint is availible on huggingface🤗. [[checkpoint]](https://huggingface.co/RUCAIBox/rear-llama-7b-hf)
 
+The question-and-answer pairs, along with the documents used for inference, are available for download at the following link: [[data]](https://huggingface.co/datasets/yhao-wang/rear-eval).
+
 ## 🚀 Quick Start
 
 1. Install dependencies.
@@ -25,8 +27,8 @@ The checkpoint is availible on huggingface🤗. [[checkpoint]](https://huggingfa
             "First law of thermodynamics was stated by William"
             ]
         }
-    res = reliability(dic)['rely_answer']
-    print(res['rely_answer'])
+    final_answer = reliability(dic)['rely_answer']
+    print(final_answer)
     ```
 
 ## 🔍 Training and Inference Scripts
@@ -60,7 +62,7 @@ The checkpoint is availible on huggingface🤗. [[checkpoint]](https://huggingfa
 
 ## 🌟 Acknowledgement
 
-Please cite the following paper if you find our code helpful.
+Please cite the following paper if you find our code or data helpful.
 
 ```bibtex
 @article{wang2024rear,
