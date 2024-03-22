@@ -19,10 +19,8 @@ def get_args():
 
 
 def load_data(source):
-    data = []
     with open(source) as f:
-        for line in f.readlines():
-            data.append(json.loads(line))
+        data = json.load(f)
     return data
 
 
@@ -49,12 +47,12 @@ def consistency(dic):
     # dic.update(dict(response=response))
     con_answer = max(response, key=lambda x: x['score'] + 9 * x['con'])['pred']
     ans_dict = {'pred': con_answer}
-    gold_ans = response['reference']
+    gold_ans = dic['reference']
     if gold_ans is not None:
         ans_dict.update(dict(EM=EM_compute(gold_ans, con_answer)))
         ans_dict.update(dict(F1=F1_compute(gold_ans, con_answer)))
-    response.update(dict(con_answer=ans_dict))
-    dic.update(dic(response=response))
+    dic.update(dict(con_answer=ans_dict))
+    dic.update(dict(response=response))
     return dic
 
 
@@ -66,9 +64,9 @@ def s2(args):
     f1 = []
     for dic in tqdm(data):
         res.append(consistency(dic))
-        if res['reference'] is not None:
-            em.append(res['response']['con_answer']['EM'])
-            f1.append(res['response']['con_answer']['F1'])
+        if res[-1]['reference'] is not None:
+            em.append(res[-1]['con_answer']['EM'])
+            f1.append(res[-1]['con_answer']['F1'])
     if em:
         print(f"EM: {sum(em) / len(em) * 100}")
         print(f"F1: {sum(f1) / len(em) * 100}")
@@ -84,9 +82,9 @@ def s1(args):
     f1 = []
     for dic in tqdm(data):
         res.append(reliability(dic))
-        if res['reference'] is not None:
-            em.append(res['response']['rely_answer']['EM'])
-            f1.append(res['response']['rely_answer']['F1'])
+        if res[-1]['reference'] is not None:
+            em.append(res[-1]['rely_answer']['EM'])
+            f1.append(res[-1]['rely_answer']['F1'])
     if em:
         print(f"EM: {sum(em) / len(em) * 100}")
         print(f"F1: {sum(f1) / len(em) * 100}")

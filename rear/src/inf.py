@@ -27,7 +27,7 @@ def get_vllm_model(model_path, **kwargs):
 def get_model(model_path, **kwargs):
     global model, tokenizer
     kwargs.update({"torch_dtype": torch.bfloat16, 'trust_remote_code': True})
-    model = LlamaForCausalLM.from_pretrained(model_path, **kwargs)
+    model = LlamaForCausalLM.from_pretrained(model_path, **kwargs).to(0)
     tokenizer = AutoTokenizer.from_pretrained(model_path, **kwargs)
     model = model.eval()
 
@@ -52,8 +52,6 @@ def get_scores(query, ctxs):
 def batch_perplexity(pairs):
     input_ids = []
     labels = []
-    beta = model.beta
-    model.beta = None
     for p in pairs:
         if p[1] == "":
             p[1] == "</s>"
@@ -67,7 +65,7 @@ def batch_perplexity(pairs):
             o = [1]
         labels.append(o)
     inputs = tokenizer.pad(input_ids, return_tensors="pt")
-    inputs = {k: v.to("cuda") for k, v in inputs.items()}
+    inputs = {k: v.to(0) for k, v in inputs.items()}
     loss = []
     with torch.no_grad():
         outputs = model(**inputs)
@@ -76,12 +74,11 @@ def batch_perplexity(pairs):
             res = logits[i, -len(label):, :].contiguous()
             label = torch.as_tensor(label, device="cuda")
             loss.append(F.cross_entropy(res, label).item())
-    model.beta = beta 
     return loss
 
 def get_perplexity(query, ctxs, res):
     batch_size = 10
-    preds = [dic['preds'][0] for dic in res]
+    preds = [dic['pred'][0] for dic in res]
     q_template = "<s>{d}<BEGIN_QUERY>{q}<GENERATE_SCORE><IRRELEVANT>"
     a_template = "{a}"
     
