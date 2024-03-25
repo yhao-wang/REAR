@@ -4,3 +4,5 @@ rear-llama-7b-hf/
 .*/
 *.ipynb
 *.json
+test.bash
+rt.py

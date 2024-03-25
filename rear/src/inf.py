@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer
@@ -66,15 +67,15 @@ def batch_perplexity(pairs):
         labels.append(o)
     inputs = tokenizer.pad(input_ids, return_tensors="pt")
     inputs = {k: v.to(0) for k, v in inputs.items()}
-    loss = []
+    ppl = []
     with torch.no_grad():
         outputs = model(**inputs)
         logits = outputs.logits
         for i, label in enumerate(labels):
             res = logits[i, -len(label):, :].contiguous()
             label = torch.as_tensor(label, device="cuda")
-            loss.append(F.cross_entropy(res, label).item())
-    return loss
+            ppl.append(math.exp(-F.cross_entropy(res, label).item()))
+    return ppl
 
 def get_perplexity(query, ctxs, res):
     batch_size = 10
