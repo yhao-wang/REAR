@@ -55,7 +55,7 @@ def batch_perplexity(pairs):
     labels = []
     for p in pairs:
         if p[1] == "":
-            p[1] == "</s>"
+            p[1] = "</s>"
         tokenized = [tokenizer(s, add_special_tokens=False).input_ids for s in p]
         i = tokenized[0] + tokenized[1][:-1]
         o = tokenized[1]
