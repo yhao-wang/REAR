@@ -1,4 +1,4 @@
-# REAR
+# REAR (EMNLP 2024)
 REAR is a **RE**levance-**A**ware **R**etrieval-augmented framework for open-domain question answering. [[paper]](https://arxiv.org/abs/2402.17497)
 
 The checkpoint is availible on huggingface🤗. [[checkpoint]](https://huggingface.co/RUCAIBox/rear-llama-7b-hf)
